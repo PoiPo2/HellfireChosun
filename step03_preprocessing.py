@@ -8,9 +8,7 @@ import pandas as pd
 
 
 """ 전처리하고자 하는 csv 파일을 불러옵니다. """
-raw_data = pd.read_csv('./data/Gyeonggi_2_Suwon_renew_11315.csv', index_col='datetime')
-
-data = raw_data[-730:]
+data = pd.read_csv('./data/Gyeonggi_2_Suwon_renew_11315.csv', index_col='datetime')
 # print(f'{data}\n{type(data)}')
 """ 데이터를 차트로 그려 분포를 확인합니다. """
 # data.plot()
@@ -29,7 +27,7 @@ scaled_data = minmaxscaler.fit_transform(data)
 """ 시퀀스(Sequence) 데이터를 생성하기 위한 리스트를 정의합니다. """
 sequence_x, sequence_y = [], []
 """ 시퀀스 데이터의 주기(period)를 정의합니다. 단위는 일(day) 입니다. """
-period = 30
+period = 730
 for idx in range(len(scaled_data) - period):
     x = scaled_data[idx:idx + period]
     y = scaled_data[idx + period]
@@ -46,7 +44,7 @@ sequence_y = np.array(sequence_y)
 # print(sequence_y[0], sequence_y.shape)
 
 """ 학습 및 테스트에 사용할 데이터셋을 구분 및 생성합니다. """
-x_train, x_test, y_train, y_test = train_test_split(sequence_x, sequence_y, test_size=0.1)
+x_train, x_test, y_train, y_test = train_test_split(sequence_x, sequence_y, test_size=0.2)
 print(x_train.shape)
 print(x_test.shape)
 print(y_train.shape)
@@ -54,17 +52,29 @@ print(y_test.shape)
 
 """ 모델 """
 model = Sequential(name='model_exam')
-model.add(LSTM(30, input_shape=(30, 3), activation='tanh'))
+model.add(LSTM(128, input_shape=(730, 3), activation='tanh', return_sequences=True))
 model.add(Dropout(0.2))
-# model.add(LSTM(64, activation='tanh'))
-# model.add(Dropout(0.1))
+model.add(LSTM(64, activation='tanh', return_sequences=True))
+model.add(Dropout(0.2))
+model.add(LSTM(32, activation='tanh', return_sequences=False))
 model.add(Flatten())
 model.add(Dense(3))
 model.compile(loss='mse', optimizer='sgd')
 model.summary()
 
-fit_hist = model.fit(x_train, y_train, epochs=50, validation_data=(x_test, y_test), shuffle=False)
+fit_hist = model.fit(x_train, y_train, epochs=20, validation_data=(x_test, y_test), shuffle=False)
 plt.plot(fit_hist.history['loss'], label='loss')
 plt.plot(fit_hist.history['val_loss'], label='val_loss')
 plt.legend()
 plt.show()
+model.save('./test_model.h5')
+# model = load_model('./test_model.h5')
+# print(y_test.shape)
+#
+# predict = model.predict(x_test)
+# plt.plot(y_test[5:][0], label='actual(avg_tmp)')
+# plt.plot(predict[5:][0], label='predict(avg_tmp')
+# plt.plot(y_test[5:][1], label='actual(min_tmp)')
+# plt.plot(predict[5:][1], label='predict(min_tmp')
+# plt.legend()
+# plt.show()
