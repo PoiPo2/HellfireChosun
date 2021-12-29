@@ -1,51 +1,53 @@
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import *
-from step03_preprocessing import getPeriod
+from step03_preprocessing_KMC import getPeriod
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import time
 
 
-FILENAME = 'model_GB-3-5.h5'
+""" (경로 수정 금지) 파일을 불러오거나 저장하는 경로를 설정합니다. """
+LOAD_PATH = './sequence_data'
+SAVE_PATH = './models'              # 없으면 models 이름으로 폴더를 만드셔야 합니다.
+
+""" 자동으로 시퀀스데이터를 불러오고 모델 생성에 필요한 파일명에 사용될 지역명을 입력합니다. """
+REGION = 'Gyeonggi'
 
 if __name__ == '__main__':
-    start_time = time.time()
-    """ step03 과정에서 설정한 주기(period)값을 불러옵니다. """
-    period = getPeriod()
-    """ step03 과정에서 저장했던 학습 데이터를 불러옵니다. """
-    # x_train, x_test, y_train, y_test = np.load(f'./training_metadata_{period}.npy', allow_pickle=True)
-    # x_train, x_test, y_train, y_test = np.load(f'./training_metadata_Mungyeong_730.npy', allow_pickle=True)
-    x_train, x_test, y_train, y_test = np.load(f'./training_metadata_Mungyeong_30.npy', allow_pickle=True)
+    for element in os.listdir(LOAD_PATH):
+        """ 시퀀스데이터(.npy)만 LOAD_PATH 에서 불러옵니다. """
+        if REGION in element and '.npy' in element:
+            start_time = time.time()
+            filename = element.split('sequence')[0]
+            model_filename = ''.join([filename, 'model.h5'])
+            """ 시퀀스데이터(.npy)를 불러옵니다. """
+            x_train, x_test, y_train, y_test = np.load(f'{LOAD_PATH}/{element}', allow_pickle=True)
 
-    model = Sequential(name='exam')
-    """ 전체적인 성능 개선을 위한 방법으로는 아래의 방법을 생각해볼만 합니다. """
-    """ 1. LSTM Layer 갯수 및 파라미터 조절 """
-    """ 2. Dropout과 같은 과적합방지 알고리즘의 적절한 사용 """
-    """ 3. epochs(학습량)의 적절한 조절 """
-    """ 4. 손실함수(loss-function) 및 최적화함수(optimizer)의 적절한 사용 """
-    model.add(LSTM(768, input_shape=(period, 3), activation='tanh', return_sequences=True))
-    model.add(Dropout(0.3))
-    model.add(LSTM(512, activation='tanh', return_sequences=True))
-    model.add(Dropout(0.25))
-    model.add(LSTM(256, activation='tanh', return_sequences=True))
-    model.add(Dropout(0.25))
-    model.add(LSTM(128, activation='tanh', return_sequences=True))
-    model.add(Dropout(0.2))
-    model.add(LSTM(64, activation='tanh', return_sequences=True))
-    model.add(Dropout(0.2))
-    model.add(LSTM(32, activation='tanh', return_sequences=False))
-    model.add(Dropout(0.1))
-    model.add(Flatten())
-    model.add(Dense(3))
-    model.compile(loss='mse', optimizer='adam')
-    model.summary()
+            """ LSTM 네트워크를 생성합니다. """
+            model = Sequential([LSTM(256, input_shape=(getPeriod(), 3), activation='tanh', return_sequences=True),
+                                Dropout(0.3),
+                                LSTM(128, activation='tanh', return_sequences=True),
+                                Dropout(0.2),
+                                LSTM(64, activation='tanh', return_sequences=True),
+                                Dropout(0.2),
+                                LSTM(32, activation='tanh', return_sequences=False),
+                                Dropout(0.1),
+                                Flatten(),
+                                Dense(3)])
+            model.compile(loss='mse', optimizer='adam')
 
-    fit_hist = model.fit(x_train, y_train, epochs=60, validation_data=(x_test, y_test), shuffle=False)
-    model.save(f'./{FILENAME}')
-    print(f'"{FILENAME}" is saved.')
-    print(f'runtime is {round(time.time() - start_time, 3)} seconds.')
+            """ 생성된 LSTM 모델을 학습합니다. """
+            fit_hist = model.fit(x_train, y_train, epochs=100, validation_data=(x_test, y_test), shuffle=False,
+                                 verbose=1)
 
-    plt.plot(fit_hist.history['loss'], label='loss')
-    plt.plot(fit_hist.history['val_loss'], label='val_loss')
-    plt.legend()
-    plt.show()
+            """ 모델을 저장합니다. """
+            model.save(f'{SAVE_PATH}/{model_filename}')
+            print(f'"{model_filename}" is saved.')
+            print(f'runtime is {round(time.time() - start_time, 3)} seconds.')
+
+            """ 학습이 완료된 모델의 척도를 그래프로 표현하고 저장합니다. """
+            plt.plot(fit_hist.history['loss'], label='loss')
+            plt.plot(fit_hist.history['val_loss'], label='val_loss')
+            plt.legend()
+            plt.savefig(f'./{model_filename}.png')
