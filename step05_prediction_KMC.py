@@ -70,4 +70,4 @@ def predict(province):
 
 
 if __name__ == '__main__':
-    predict(province='Dongducheon')
+    predict(province='Cheongju')
