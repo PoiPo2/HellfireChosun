@@ -1,8 +1,13 @@
+# Version 1.1
+# + 단위 테스트 및 통합 테스트 검증 완료
+
 from datetime import datetime, timedelta
 from PyQt5.QtCore import *
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import *
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+import matplotlib.pyplot as plt
 import pandas as pd
 import sys
 from step05_prediction_KMC import predict
@@ -79,25 +84,29 @@ class Application(QWidget):
         self.driver = setDriverOptions()
         self.predict_dataframe = pd.DataFrame()
         self.predict_result = []
+        self.chart_data = {}
         self.thread_prediction_flag = False
         self.province = None
+        self.element = None
 
         # Initialize Q-Objects
         self.label = {'current_time': QLabel(self), 'region': QLabel(self), 'province': QLabel(self),
                       'element': QLabel(self), 'notice': QLabel(self), 'exit': QLabel(self),
-                      'result_frame': QLabel(self), 'result_header': QLabel(self), 'result': QLabel(self)}
+                      'result_frame': QLabel(self), 'result_header': QLabel(self), 'result': QLabel(self),
+                      'result_arrow': QLabel(self), 'chart': QLabel(self)}
         self.button = {'region': QPushButton(self), 'province': QPushButton(self), 'element': QPushButton(self),
-                       'exit': QPushButton(self)}
+                       'exit': QPushButton(self), 'chart': QPushButton(self)}
         self.combobox = {'region': QComboBox(self), 'province': QComboBox(self), 'element': QComboBox(self)}
 
         # Setup widget environments
-        self.initializeWindow(name='Proto-type: Application(1.1)', rgb=(255, 255, 255), w=1080, h=860)
+        self.initializeWindow(name='HFC(Hell-Fire Chosun) Application 1.1', rgb=(255, 255, 255), w=1080, h=860)
         self.initializeStaticObjects()
 
         # Triggers
         self.button['region'].clicked.connect(self.clickedRegionButton)
         self.button['province'].clicked.connect(self.clickedProvinceButton)
         self.button['element'].clicked.connect(self.clickedElementButton)
+        self.button['chart'].clicked.connect(self.clickedChartButton)
         self.button['exit'].clicked.connect(self.clickedExitButton)
 
         # Launched QThread
@@ -137,7 +146,7 @@ class Application(QWidget):
             self.setWindowIcon(QtGui.QIcon('./app_icon/main.png'))
             # 애플리케이션의 배경화면을 구성합니다.
             palette = QtGui.QPalette()
-            palette.setBrush(QtGui.QPalette.Background, QtGui.QBrush(QtGui.QPixmap('./app_icon/background_1.jpeg')))
+            palette.setBrush(QtGui.QPalette.Background, QtGui.QBrush(QtGui.QPixmap('./app_icon/background.jpeg')))
             self.setPalette(palette)
         except Exception as E:
             print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
@@ -201,22 +210,31 @@ class Application(QWidget):
         self.label['result_frame'].setStyleSheet('border-radius: 20px; border: 3px; border-style: solid; border-color: rgb(255, 255, 255)')
         self.label['result_header'].setGeometry((self.widget_options['width'] / 2) - 200, 270, 400, 30)
         self.label['result_header'].setStyleSheet('color: rgb(255, 255, 255)')
-        self.label['result_header'].setFont(QtGui.QFont('Ariel', 15, QtGui.QFont.Bold))
         self.label['result_header'].setAlignment(Qt.AlignCenter)
-        self.label['result'].setGeometry((self.widget_options['width'] / 2) - 200, 325, 400, 50)
+        self.label['result_header'].setFont(QtGui.QFont('Ariel', 15, QtGui.QFont.Bold))
+        self.label['result'].setGeometry((self.widget_options['width'] / 2) - 125, 340, 250, 60)
         self.label['result'].setAlignment(Qt.AlignCenter)
         self.label['result'].setFont(QtGui.QFont('Ariel', 50, QtGui.QFont.Bold))
+        self.label['result_arrow'].setGeometry((self.widget_options['width'] / 2) + 160, 330, 80, 80)
+        self.label['result_arrow'].setVisible(False)
 
-    # Not usage
-    def selectRegion(self):
-        # print(f'선택 완료 -> {self.combobox["region"].currentText()}')
-        self.combobox['province'].clear()
-        for province in self.region_item[self.combobox['region'].currentText()]:
-            self.combobox['province'].addItem(province)
-        print('---------')
-            # self.combobox['province'].addItem(province)
+        # 차트
+        self.button['chart'].setGeometry(self.widget_options['width'] - 110, 490, 60, 60)
+        self.button['chart'].setStyleSheet('background: rgba(255, 255, 255, 0.8)')
+        self.button['chart'].setIcon(QtGui.QIcon('./app_icon/chart.png'))
+        self.button['chart'].setIconSize(QSize(30, 30))
+        self.button['chart'].setToolTip('지난 한 달간 기온을 그래프로 확인합니다.')
+        self.button['chart'].setEnabled(False)
+        self.button['chart'].setStyleSheet('background: rgba(120, 120, 120, 0.8)')
+        self.label['chart'].setText('CHART')
+        self.label['chart'].setGeometry(self.widget_options['width'] - 110, 445, 60, 60)
+        self.label['chart'].setStyleSheet('color: rgb(255, 255, 255)')
+        self.label['chart'].setAlignment(Qt.AlignCenter)
+        self.label['chart'].setFont(QtGui.QFont('Ariel', 10, QtGui.QFont.Bold))
+        print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Success to initialize static objects.')
 
     def clickedRegionButton(self):
+        print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Clicked "region" button.')
         self.combobox['province'].clear()
         self.combobox['element'].clear()
         self.combobox['province'].setEnabled(True)
@@ -228,6 +246,7 @@ class Application(QWidget):
             self.combobox['province'].addItem(province)
 
     def clickedProvinceButton(self):
+        print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Clicked "province" button.')
         self.combobox['element'].clear()
         self.combobox['element'].addItem('평균기온(℃)')
         self.combobox['element'].addItem('최저기온(℃)')
@@ -237,6 +256,7 @@ class Application(QWidget):
         self.button['element'].setEnabled(True)
 
     def clickedElementButton(self):
+        print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Clicked "element" button.')
         self.label['notice'].setVisible(True)
         self.button['region'].setStyleSheet('color: rgb(0, 0, 0); background-color: rgb(120, 120, 120)')
         self.button['region'].setEnabled(False)
@@ -248,7 +268,13 @@ class Application(QWidget):
         self.button['element'].setEnabled(False)
         self.combobox['element'].setEnabled(False)
         self.label['notice'].setText(f'"{self.combobox["province"].currentText()}"지역 데이터 수집 중입니다.. (1 / 3)')
+        self.label['result_header'].setVisible(False)
+        self.label['result'].setVisible(False)
+        self.label['result_arrow'].setVisible(False)
+        self.button['chart'].setEnabled(False)
+        self.button['chart'].setStyleSheet('background: rgba(120, 120, 120, 0.8)')
 
+        self.element = self.combobox['element'].currentText()
         self.province = self.combobox['province'].currentText()
         # 데이터 수집을 위한 기준시간 설정
         current_time = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -278,18 +304,17 @@ class Application(QWidget):
                             # 데이터 추가
                             date_time.append(base_time.strftime('%Y-%m-%d'))
                             avg_tmp.append(content.split('\n')[0].split(':')[-1].replace('℃', ''))
-                            min_tmp.append(content.split('\n')[1].split(':')[-1].replace('℃', ''))
-                            max_tmp.append(content.split('\n')[2].split(':')[-1].replace('℃', ''))
-
-
-        except Exception as E:
+                            max_tmp.append(content.split('\n')[1].split(':')[-1].replace('℃', ''))
+                            min_tmp.append(content.split('\n')[2].split(':')[-1].replace('℃', ''))
+        except NoSuchElementException:
             pass
+        except Exception as E:
+            print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
 
         previous_df['datetime'] = date_time
         previous_df['avg_tmp'] = avg_tmp
         previous_df['min_tmp'] = min_tmp
         previous_df['max_tmp'] = max_tmp
-        # print('---------')
 
         # 현재시간 기준, 오늘을 제외한 이전 일자 까지의 데이터를 수집하여 데이터프레임 생성
         current_df = pd.DataFrame()
@@ -312,17 +337,17 @@ class Application(QWidget):
                             # 데이터 추가
                             date_time.append(base_time.strftime('%Y-%m-%d'))
                             avg_tmp.append(content.split('\n')[0].split(':')[-1].replace('℃', ''))
-                            min_tmp.append(content.split('\n')[1].split(':')[-1].replace('℃', ''))
-                            max_tmp.append(content.split('\n')[2].split(':')[-1].replace('℃', ''))
-
-        except Exception as E:
+                            max_tmp.append(content.split('\n')[1].split(':')[-1].replace('℃', ''))
+                            min_tmp.append(content.split('\n')[2].split(':')[-1].replace('℃', ''))
+        except NoSuchElementException:
             pass
+        except Exception as E:
+            print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
 
         current_df['datetime'] = date_time
         current_df['avg_tmp'] = avg_tmp
         current_df['min_tmp'] = min_tmp
         current_df['max_tmp'] = max_tmp
-        # print(current_df.tail(3))
 
         # 두 개의 데이터프레임 합치기
         self.predict_dataframe = pd.concat([previous_df, current_df], ignore_index=True)
@@ -331,16 +356,50 @@ class Application(QWidget):
         self.thread_prediction_flag = True
         if self.combobox['element'].currentText() == '평균기온(℃)':
             self.label['result_frame'].setStyleSheet('border-radius: 20px; border: 3px; border-style: solid; border-color: rgb(51, 255, 51)')
-            text = ''.join([self.combobox['province'].currentText(), ' 지역의 예상 평균기온(℃)'])
+            text = ''.join([self.combobox['province'].currentText(), ' 지역의 예상 평균기온'])
             self.label['result_header'].setText(text)
         elif self.combobox['element'].currentText() == '최저기온(℃)':
             self.label['result_frame'].setStyleSheet('border-radius: 20px; border: 3px; border-style: solid; border-color: rgb(0, 128, 255)')
-            text = ''.join([self.combobox['province'].currentText(), ' 지역의 예상 최저기온(℃)'])
+            text = ''.join([self.combobox['province'].currentText(), ' 지역의 예상 최저기온'])
             self.label['result_header'].setText(text)
         else:
             self.label['result_frame'].setStyleSheet('border-radius: 20px; border: 3px; border-style: solid; border-color: rgb(255, 51, 51)')
-            text = ''.join([self.combobox['province'].currentText(), ' 지역의 예상 최고기온(℃)'])
+            text = ''.join([self.combobox['province'].currentText(), ' 지역의 예상 최고기온'])
             self.label['result_header'].setText(text)
+
+    def clickedChartButton(self):
+        print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Clicked "chart" button.')
+        try:
+            plt.figure('Chart')
+            plt.plot(self.chart_data['previous_time'], self.chart_data['previous_temp'], color='#000000', linewidth=1)
+            plt.plot(self.chart_data['predict_time'], self.chart_data['predict_temp'], color='#00ff00', linewidth=3)
+            plt.xticks([self.chart_data['previous_time'][0], self.chart_data['previous_time'][10],
+                        self.chart_data['previous_time'][20], self.chart_data['previous_time'][-1]])
+            tmp_list = []
+            for i in range(len(self.chart_data['previous_temp'])):
+                tmp_list.append(self.chart_data['previous_temp'][i])
+            tmp_list.append(self.chart_data['predict_temp'][-1])
+            plt.ylim(min(tmp_list) - 3.0, max(tmp_list) + 3.0)
+            plt.xlabel('Datetime')
+            plt.ylabel('Temperature (℃)')
+            plt.grid(color='#989898', linestyle='--', linewidth=0.5)
+            plt.axhline(y=max(tmp_list), color='#ff3333', linewidth=0.5)
+            plt.axhline(y=min(tmp_list), color='#0080ff', linewidth=0.5)
+            y_ticker = [min(tmp_list), max(tmp_list)]
+            for i in range(-30, 51, 5):
+                if min(tmp_list) <= i <= max(tmp_list):
+                    y_ticker.append(float(i))
+            plt.yticks(y_ticker)
+            # Plot 의 타이틀 설정
+            if self.element == '평균기온(℃)':
+                plt.title("Predict tomorrow's temperature (Average)")
+            elif self.element == '최저기온(℃)':
+                plt.title("Predict tomorrow's temperature (Minimum)")
+            else:
+                plt.title("Predict tomorrow's temperature (Maximum)")
+            plt.show()
+        except Exception as E:
+            print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
 
     def clickedExitButton(self):
         print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Exit.')
@@ -374,57 +433,123 @@ class ThreadGetData(QThread):
                 self.parent.label['notice'].setText(f'"{self.parent.combobox["province"].currentText()}"지역 예측 결과를 그리는 중입니다.. (3 / 3)')
                 self.sleep(1)
                 self.parent.label['notice'].setVisible(False)
+                self.parent.label['result_header'].setVisible(True)
+                self.parent.label['result'].setVisible(True)
                 if self.parent.combobox['element'].currentText() == '평균기온(℃)':
                     try:
                         data = self.parent.predict_result[0][0]
-                        self.parent.label['result'].setText(str(round(data, 1)))
+                        result_data = ''.join([str(round(data, 1)), ' ℃'])
+                        self.parent.label['result'].setText(result_data)
                         if float(data) > float(self.parent.predict_dataframe.iloc[-1, 0]):
                             self.parent.label['result'].setStyleSheet('color: rgb(255, 51, 51)')
+                            self.parent.label['result_arrow'].setPixmap(QtGui.QPixmap('./app_icon/arrow_up.png').scaled(80, 80))
+                            self.parent.label['result_arrow'].setVisible(True)
                         elif float(data) < float(self.parent.predict_dataframe.iloc[-1, 0]):
                             self.parent.label['result'].setStyleSheet('color: rgb(0, 128, 255)')
+                            self.parent.label['result_arrow'].setPixmap(QtGui.QPixmap('./app_icon/arrow_down.png').scaled(80, 80))
+                            self.parent.label['result_arrow'].setVisible(True)
                         else:
                             self.parent.label['result'].setStyleSheet('color: rgb(255, 255, 255)')
+
+                        # 차트 데이터 구성
+                        try:
+                            samples = pd.DataFrame(self.parent.predict_dataframe, index=None)
+                            samples.reset_index(inplace=True)
+                            self.parent.chart_data['previous_time'] = list(samples['datetime'])
+                            self.parent.chart_data['previous_temp'] = list(samples['avg_tmp'])
+                            for i in range(len(self.parent.chart_data['previous_temp'])):
+                                self.parent.chart_data['previous_temp'][i] = float(self.parent.chart_data['previous_temp'][i])
+
+                            self.parent.chart_data['predict_time'] = [(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'), datetime.now().strftime('%Y-%m-%d')]
+                            self.parent.chart_data['predict_temp'] = [float(self.parent.predict_dataframe.iloc[-1, 1]), round(float(self.parent.predict_result[0][0]), 1)]
+                        except Exception as E:
+                            print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
+                            self.parent.button['chart'].setEnabled(False)
+                            self.parent.button['chart'].setStyleSheet('background: rgba(120, 120, 120, 0.8)')
                     except Exception as E:
                         print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
                         self.parent.label['result'].setText('NaN')
                     else:
                         print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - 평균기온: {data:.1f}')
+                        self.parent.button['chart'].setEnabled(True)
+                        self.parent.button['chart'].setStyleSheet('background: rgba(255, 255, 255, 0.8)')
                 elif self.parent.combobox['element'].currentText() == '최저기온(℃)':
                     try:
                         data = self.parent.predict_result[0][1]
-                        self.parent.label['result'].setText(str(round(data, 1)))
+                        result_data = ''.join([str(round(data, 1)), ' ℃'])
+                        self.parent.label['result'].setText(result_data)
                         if float(data) > float(self.parent.predict_dataframe.iloc[-1, 1]):
                             self.parent.label['result'].setStyleSheet('color: rgb(255, 51, 51)')
+                            self.parent.label['result_arrow'].setPixmap(QtGui.QPixmap('./app_icon/arrow_up.png').scaled(80, 80))
+                            self.parent.label['result_arrow'].setVisible(True)
                         elif float(data) < float(self.parent.predict_dataframe.iloc[-1, 1]):
                             self.parent.label['result'].setStyleSheet('color: rgb(0, 128, 255)')
+                            self.parent.label['result_arrow'].setPixmap(QtGui.QPixmap('./app_icon/arrow_down.png').scaled(80, 80))
+                            self.parent.label['result_arrow'].setVisible(True)
                         else:
                             self.parent.label['result'].setStyleSheet('color: rgb(255, 255, 255)')
+
+                        # 차트 데이터 구성
+                        try:
+                            samples = pd.DataFrame(self.parent.predict_dataframe, index=None)
+                            samples.reset_index(inplace=True)
+                            self.parent.chart_data['previous_time'] = list(samples['datetime'])
+                            self.parent.chart_data['previous_temp'] = list(samples['min_tmp'])
+                            for i in range(len(self.parent.chart_data['previous_temp'])):
+                                self.parent.chart_data['previous_temp'][i] = float(self.parent.chart_data['previous_temp'][i])
+
+                            self.parent.chart_data['predict_time'] = [(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'), datetime.now().strftime('%Y-%m-%d')]
+                            self.parent.chart_data['predict_temp'] = [float(self.parent.predict_dataframe.iloc[-1, 2]), round(float(self.parent.predict_result[0][1]), 1)]
+                        except Exception as E:
+                            print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
+                            self.parent.button['chart'].setEnabled(False)
+                            self.parent.button['chart'].setStyleSheet('background: rgba(120, 120, 120, 0.8)')
                     except Exception as E:
                         print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
                         self.parent.label['result'].setText('NaN')
                     else:
                         print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - 최저기온: {data:.1f}')
+                        self.parent.button['chart'].setEnabled(True)
+                        self.parent.button['chart'].setStyleSheet('background: rgba(255, 255, 255, 0.8)')
                 else:
                     try:
                         data = self.parent.predict_result[0][2]
-                        self.parent.label['result'].setText(str(round(data, 1)))
+                        result_data = ''.join([str(round(data, 1)), ' ℃'])
+                        self.parent.label['result'].setText(result_data)
                         if float(data) > float(self.parent.predict_dataframe.iloc[-1, 2]):
                             self.parent.label['result'].setStyleSheet('color: rgb(255, 51, 51)')
+                            self.parent.label['result_arrow'].setPixmap(QtGui.QPixmap('./app_icon/arrow_up.png').scaled(80, 80))
+                            self.parent.label['result_arrow'].setVisible(True)
                         elif float(data) < float(self.parent.predict_dataframe.iloc[-1, 2]):
                             self.parent.label['result'].setStyleSheet('color: rgb(0, 128, 255)')
+                            self.parent.label['result_arrow'].setPixmap(QtGui.QPixmap('./app_icon/arrow_down.png').scaled(80, 80))
+                            self.parent.label['result_arrow'].setVisible(True)
                         else:
                             self.parent.label['result'].setStyleSheet('color: rgb(255, 255, 255)')
+
+                        # 차트 데이터 구성
+                        try:
+                            samples = pd.DataFrame(self.parent.predict_dataframe, index=None)
+                            samples.reset_index(inplace=True)
+                            self.parent.chart_data['previous_time'] = list(samples['datetime'])
+                            self.parent.chart_data['previous_temp'] = list(samples['max_tmp'])
+                            for i in range(len(self.parent.chart_data['previous_temp'])):
+                                self.parent.chart_data['previous_temp'][i] = float(self.parent.chart_data['previous_temp'][i])
+
+                            self.parent.chart_data['predict_time'] = [(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'), datetime.now().strftime('%Y-%m-%d')]
+                            self.parent.chart_data['predict_temp'] = [float(self.parent.predict_dataframe.iloc[-1, 3]), round(float(self.parent.predict_result[0][2]), 1)]
+                        except Exception as E:
+                            print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
+                            self.parent.button['chart'].setEnabled(False)
+                            self.parent.button['chart'].setStyleSheet('background: rgba(120, 120, 120, 0.8)')
                     except Exception as E:
                         print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - Unknown error occurred in "{sys._getframe().f_code.co_name}()"\n\t\t\t\t\t  {E}')
                         self.parent.label['result'].setText('NaN')
                     else:
                         print(f'[{datetime.now().strftime("%y-%m-%d %H:%M:%S")}] - 최고기온: {data:.1f}')
-                print(self.parent.predict_dataframe.iloc[-1, 0])
-                print(self.parent.predict_dataframe.iloc[-1, 1])
-                print(self.parent.predict_dataframe.iloc[-1, 2])
-
+                        self.parent.button['chart'].setEnabled(True)
+                        self.parent.button['chart'].setStyleSheet('background: rgba(255, 255, 255, 0.8)')
                 # 콤보박스 초기화
-
                 self.parent.combobox['region'].setEnabled(True)
                 self.parent.combobox['province'].setEnabled(True)
                 self.parent.combobox['element'].setEnabled(True)
